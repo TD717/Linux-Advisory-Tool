@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Linux Hardening Advisor
 
 Local advisory CLI for standalone Linux hosts: static benchmark-style checks plus lightweight runtime context, explainable correlation, and JSON/Markdown reports.
@@ -29,9 +28,4 @@ advisory run --json-out report.json --markdown-out report.md
 advisory list-benchmarks
 advisory host-snapshot
 ```
-
-Equivalent: `python -m linux_hardening_advisor …` with the same subcommands. Use `advisory --help` and `advisory run --help` for options. Run on Linux for real host data; tests use mocks.
 =======
-# Linux-Advisory-Tool
-Linux Advisory Tool
->>>>>>> fa4ae4b1e75a0a00dd3485966d19f601d8241c70
