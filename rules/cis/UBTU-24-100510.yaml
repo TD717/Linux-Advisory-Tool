@@ -1,0 +1,45 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-100510
+# Section: 1.17
+# Parts:    enabled, active
+
+- id: UBTU-24-100510-enabled
+  section: "1.17"
+  title: "[UBTU-24-100510] Part: enabled — apparmor.service"
+  category: apparmor
+  rationale: >
+    The operating system must be configured to use AppArmor. Verify
+    systemctl is-enabled apparmor.service prints enabled.
+  check_type: service_enabled
+  target:
+    service: apparmor.service
+  expected: {}
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Enable and start apparmor: sudo systemctl enable apparmor.service --now
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - apparmor
+    - UBTU-24-100510
+
+- id: UBTU-24-100510-active
+  section: "1.17"
+  title: "[UBTU-24-100510] Part: active — apparmor.service"
+  category: apparmor
+  rationale: >
+    Verify systemctl is-active apparmor.service prints active.
+  check_type: service_active
+  target:
+    service: apparmor.service
+  expected: {}
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Enable and start apparmor: sudo systemctl enable apparmor.service --now
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - apparmor
+    - UBTU-24-100510

@@ -1,0 +1,46 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-100810
+# Section: 1.23
+# Parts:    enabled, active
+
+- id: UBTU-24-100810-enabled
+  section: "1.23"
+  title: "[UBTU-24-100810] Part: enabled — ssh.service"
+  category: ssh
+  rationale: >
+    The operating system must use SSH to protect confidentiality and integrity of
+    transmitted information. Verify ssh.service is enabled.
+  check_type: service_enabled
+  target:
+    service: ssh.service
+  expected: {}
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Enable and start ssh: sudo systemctl enable ssh.service --now; ensure running:
+    sudo systemctl start ssh.service
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - ssh
+    - UBTU-24-100810
+
+- id: UBTU-24-100810-active
+  section: "1.23"
+  title: "[UBTU-24-100810] Part: active — ssh.service"
+  category: ssh
+  rationale: >
+    Verify ssh.service is active.
+  check_type: service_active
+  target:
+    service: ssh.service
+  expected: {}
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Enable and start ssh: sudo systemctl enable ssh.service --now; sudo systemctl start ssh.service
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - ssh
+    - UBTU-24-100810

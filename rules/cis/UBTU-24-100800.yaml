@@ -1,0 +1,25 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-100800
+# Section: 1.22
+
+- id: UBTU-24-100800
+  section: "1.22"
+  title: >
+    The operating system must have SSH installed.
+  category: ssh
+  rationale: >
+    Verify the SSH package is installed (e.g. openssh-server / openssh-client via
+    dpkg -l | grep openssh).
+  check_type: command_output_not_contains
+  verification_command: "dpkg -l 2>/dev/null | grep openssh || true"
+  target: {}
+  expected:
+    substring: "ii  openssh"
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Install the SSH meta-package: sudo apt install ssh
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - ssh

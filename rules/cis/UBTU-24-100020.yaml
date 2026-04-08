@@ -1,0 +1,26 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-100020
+# Section: 1.3
+
+- id: UBTU-24-100020
+  section: "1.3"
+  title: >
+    The operating system must not have the "ntp" package installed.
+  category: time_synchronization
+  rationale: >
+    Inaccurate time stamps make it more difficult to correlate events and can
+    lead to an inaccurate analysis.
+  check_type: command_output_contains
+  verification_command: "dpkg -l 2>/dev/null | grep ntp || true"
+  target: {}
+  expected:
+    substring: "ii  ntp "
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Uninstall the "ntp" package by using the following command:
+    sudo apt-get purge ntp
+  severity: medium
+  tags:
+    - cis
+    - ubuntu-24
+    - time

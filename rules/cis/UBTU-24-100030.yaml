@@ -1,0 +1,31 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-100030
+# Section: 1.4
+
+- id: UBTU-24-100030
+  section: "1.4"
+  title: >
+    The operating system must not have the "telnet" package installed.
+  category: network_services
+  rationale: >
+    It is detrimental for operating systems to provide, or install by default,
+    functionality exceeding requirements or mission objectives. These unnecessary
+    capabilities are often overlooked and therefore, may remain unsecure. They
+    increase the risk to the platform by providing additional attack vectors.
+    Removing the "telnetd" package decreases the risk of accidental or intentional
+    activation of the Telnet service.
+  check_type: command_output_contains
+  verification_command: "dpkg -l 2>/dev/null | grep telnetd || true"
+  target: {}
+  expected:
+    substring: "ii  telnetd "
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Remove the "telnetd" package by using the following command:
+    sudo apt-get remove telnetd
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - telnet
+    - network

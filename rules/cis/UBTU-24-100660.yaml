@@ -1,0 +1,46 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-100660
+# Section: 1.20
+# Parts:    enabled, active
+
+- id: UBTU-24-100660-enabled
+  section: "1.20"
+  title: "[UBTU-24-100660] Part: enabled — sssd.service"
+  category: authentication
+  rationale: >
+    The operating system must use the SSSD package for multifactor authentication
+    services. Verify sssd.service is enabled (systemctl is-enabled sssd).
+  check_type: service_enabled
+  target:
+    service: sssd.service
+  expected: {}
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Enable sssd on boot: sudo systemctl enable sssd.service; ensure it is running:
+    sudo systemctl start sssd.service
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - sssd
+    - UBTU-24-100660
+
+- id: UBTU-24-100660-active
+  section: "1.20"
+  title: "[UBTU-24-100660] Part: active — sssd.service"
+  category: authentication
+  rationale: >
+    Verify sssd.service is active (systemctl is-active sssd).
+  check_type: service_active
+  target:
+    service: sssd.service
+  expected: {}
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Enable and start: sudo systemctl enable sssd.service; sudo systemctl start sssd.service
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - sssd
+    - UBTU-24-100660

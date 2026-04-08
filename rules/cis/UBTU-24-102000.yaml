@@ -1,0 +1,27 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-102000
+# Section: 1.32
+
+- id: UBTU-24-102000
+  section: "1.32"
+  title: >
+    The operating system, when booted, must require authentication upon booting
+    into single-user and maintenance modes.
+  category: boot
+  rationale: >
+    Verify /boot/grub/grub.cfg enforces authentication (password_pbkdf2 or
+    set superusers) per the benchmark.
+  check_type: command_output_contains
+  verification_command: "sh -c \"grep -Eiq 'password_pbkdf2|set superusers' /boot/grub/grub.cfg 2>/dev/null && echo GRUB_AUTH_OK || echo GRUB_AUTH_FINDING\""
+  target: {}
+  expected:
+    substring: "GRUB_AUTH_FINDING"
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Configure a GRUB password (e.g. grub-mkpasswd-pbkdf2), add superusers/password
+    to /etc/grub.d/40_custom as in the benchmark, then sudo update-grub.
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - grub

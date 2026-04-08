@@ -1,0 +1,25 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-100600
+# Section: 1.18
+
+- id: UBTU-24-100600
+  section: "1.18"
+  title: >
+    The operating system must have the "libpam-pwquality" package installed.
+  category: authentication
+  rationale: >
+    Use of a complex password helps to increase the time and resources required
+    to compromise the password.
+  check_type: command_output_not_contains
+  verification_command: "dpkg -l 2>/dev/null | grep libpam-pwquality || true"
+  target: {}
+  expected:
+    substring: "ii  libpam-pwquality"
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Install the package: sudo apt install -y libpam-pwquality
+  severity: medium
+  tags:
+    - cis
+    - ubuntu-24
+    - pam

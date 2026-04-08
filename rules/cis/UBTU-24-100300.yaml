@@ -1,0 +1,29 @@
+# CIS Ubuntu 24.04 LTS — Benchmark control
+# Control: UBTU-24-100300
+# Section: 1.11
+
+- id: UBTU-24-100300
+  section: "1.11"
+  title: >
+    The operating system must have an application firewall installed in order to
+    control remote access methods.
+  category: firewall
+  rationale: >
+    Verify that the Uncomplicated Firewall is installed. If the "ufw" package is
+    not installed, ask the system administrator if another application firewall is
+    installed. If no application firewall is installed, this is a finding.
+  check_type: command_output_not_contains
+  verification_command: "dpkg -l 2>/dev/null | grep ufw || true"
+  target: {}
+  expected:
+    substring: "ii  ufw "
+  finding_condition: non_compliant_if_true
+  recommendation: >
+    Install the Uncomplicated Firewall by using the following command:
+    sudo apt install -y ufw
+  severity: high
+  tags:
+    - cis
+    - ubuntu-24
+    - ufw
+    - firewall
