@@ -1,4 +1,8 @@
-""" Rule-based correlation: priority is adjusted using explicit, readable logic. """
+"""
+Rule-based correlation: priority is adjusted using explicit, readable logic.
+
+Add new functions and append them to ``_CORRELATION_RULES``. No ML or hidden scoring.
+"""
 
 from __future__ import annotations
 
@@ -11,9 +15,8 @@ from linux_hardening_advisor.models.findings import (
     PriorityAdjustment,
     StaticFinding,
 )
-from linux_hardening_advisor.models.runtime_state import RuntimeSnapshot
+from linux_hardening_advisor.models.runtime_state import ListeningEndpoint, RuntimeSnapshot
 
-# Priority labels
 _PRIORITY_ORDER = ("low", "medium", "high", "critical")
 
 
@@ -45,7 +48,6 @@ def _correlate_one(static: StaticFinding, runtime: RuntimeSnapshot) -> Correlate
         if adj is not None:
             priority = _bump_priority(priority, adj.delta)
 
-    # Deduplicate evidence by label+detail
     seen: set[tuple[str, str]] = set()
     deduped: list[FindingEvidence] = []
     for e in runtime_evidence:
@@ -75,16 +77,56 @@ CorrelationFn = Callable[
 ]
 
 
+def _ssh_listening_externally(runtime: RuntimeSnapshot) -> list[ListeningEndpoint]:
+    out: list[ListeningEndpoint] = []
+    for e in runtime.listening_endpoints:
+        if e.protocol != "tcp" or e.local_port != 22:
+            continue
+        if _is_non_loopback_bind(e.local_address):
+            out.append(e)
+    return out
+
+
+def _is_non_loopback_bind(addr: str) -> bool:
+    if addr in ("0.0.0.0", "[::]", "*", "*:*", "[::]:*"):
+        return True
+    if addr.startswith("127.") or addr in ("[::1]", "localhost"):
+        return False
+    return True
+
+
+def _rule_ssh_noncompliant_plus_exposed_22(
+    static: StaticFinding,
+    runtime: RuntimeSnapshot,
+) -> tuple[PriorityAdjustment | None, list[FindingEvidence], list[str]]:
+    if static.status != ComplianceStatus.NON_COMPLIANT:
+        return None, [], []
+    if "ssh" not in static.tags and static.category != "ssh":
+        return None, [], []
+    exposed = _ssh_listening_externally(runtime)
+    if not exposed:
+        return None, [], []
+    detail = ", ".join(f"{e.local_address}:{e.local_port}" for e in exposed[:6])
+    ev = FindingEvidence(
+        "ssh_listen",
+        f"TCP/22 on non-loopback: {detail}",
+        {"endpoints": len(exposed)},
+    )
+    adj = PriorityAdjustment(
+        reason=(
+            "SSH-related control is non-compliant and sshd appears to listen on "
+            "non-loopback addresses; exposure may be reachable from the network."
+        ),
+        delta=1,
+        supporting_evidence=(ev,),
+    )
+    return adj, [ev], [adj.reason]
+
+
 def _rule_socket_exposure(
     static: StaticFinding,
     runtime: RuntimeSnapshot,
 ) -> tuple[PriorityAdjustment | None, list[FindingEvidence], list[str]]:
-    """
-    Example correlation (documented for the thesis):
-
-    If a finding is tagged ``socket-exposure`` and is **non-compliant**, increase
-    urgency when the host has several listening sockets (broader attack surface).
-    """
     if "socket-exposure" not in static.tags:
         return None, [], []
     if static.status != ComplianceStatus.NON_COMPLIANT:
@@ -109,6 +151,112 @@ def _rule_socket_exposure(
     return None, [ev], []
 
 
+def _rule_firewall_noncompliant_many_listeners(
+    static: StaticFinding,
+    runtime: RuntimeSnapshot,
+) -> tuple[PriorityAdjustment | None, list[FindingEvidence], list[str]]:
+    if static.category != "firewall":
+        return None, [], []
+    if static.status != ComplianceStatus.NON_COMPLIANT:
+        return None, [], []
+    n = len(runtime.listening_endpoints)
+    if n < 5:
+        return None, [], []
+    ev = FindingEvidence("listening_sockets", f"count={n}", {})
+    adj = PriorityAdjustment(
+        reason=(
+            "Firewall-related finding is non-compliant and the host reports several "
+            "listening sockets; network exposure may be elevated."
+        ),
+        delta=1,
+        supporting_evidence=(ev,),
+    )
+    return adj, [ev], [adj.reason]
+
+
+def _rule_failed_auth_ssh_context(
+    static: StaticFinding,
+    runtime: RuntimeSnapshot,
+) -> tuple[PriorityAdjustment | None, list[FindingEvidence], list[str]]:
+    if static.status != ComplianceStatus.NON_COMPLIANT:
+        return None, [], []
+    if "ssh" not in static.tags and static.category != "ssh":
+        return None, [], []
+    c = runtime.failed_login_hint_count
+    if c < 8:
+        return None, [], []
+    ev = FindingEvidence(
+        "auth_journal",
+        f"heuristic_failed_login_hints={c}",
+        {},
+    )
+    adj = PriorityAdjustment(
+        reason=(
+            "Recent authentication log excerpt shows repeated failure patterns; "
+            "SSH hardening findings may be more urgent while brute-force noise is present."
+        ),
+        delta=1,
+        supporting_evidence=(ev,),
+    )
+    return adj, [ev], [adj.reason]
+
+
+def _rule_failed_auth_authentication_category(
+    static: StaticFinding,
+    runtime: RuntimeSnapshot,
+) -> tuple[PriorityAdjustment | None, list[FindingEvidence], list[str]]:
+    if static.category != "authentication":
+        return None, [], []
+    if static.status != ComplianceStatus.NON_COMPLIANT:
+        return None, [], []
+    c = runtime.failed_login_hint_count
+    if c < 5:
+        return None, [], []
+    ev = FindingEvidence("auth_journal", f"heuristic_failed_login_hints={c}", {})
+    adj = PriorityAdjustment(
+        reason=(
+            "Authentication-related control is non-compliant and recent logs suggest "
+            "elevated failed-login activity; review account lockout and PAM settings."
+        ),
+        delta=1,
+        supporting_evidence=(ev,),
+    )
+    return adj, [ev], [adj.reason]
+
+
+def _rule_pending_updates_high_exposure(
+    static: StaticFinding,
+    runtime: RuntimeSnapshot,
+) -> tuple[PriorityAdjustment | None, list[FindingEvidence], list[str]]:
+    if static.category != "updates":
+        return None, [], []
+    if static.status != ComplianceStatus.NON_COMPLIANT:
+        return None, [], []
+    n_listen = len(runtime.listening_endpoints)
+    pending = runtime.pending_apt_upgrades
+    if pending is None or pending < 1 or n_listen < 4:
+        return None, [], []
+    ev = FindingEvidence(
+        "updates_and_exposure",
+        f"pending_apt_upgrades={pending}, listening_sockets={n_listen}",
+        {},
+    )
+    adj = PriorityAdjustment(
+        reason=(
+            "Pending package upgrades coexist with multiple listening services; "
+            "patching may reduce remotely exploitable surface."
+        ),
+        delta=1,
+        supporting_evidence=(ev,),
+    )
+    return adj, [ev], [adj.reason]
+
+
 _CORRELATION_RULES: list[CorrelationFn] = [
     _rule_socket_exposure,
+    _rule_ssh_noncompliant_plus_exposed_22,
+    _rule_firewall_noncompliant_many_listeners,
+    _rule_failed_auth_ssh_context,
+    _rule_failed_auth_authentication_category,
+    _rule_pending_updates_high_exposure,
 ]

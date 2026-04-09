@@ -59,9 +59,9 @@ def run_shell(
     env: dict[str, str] | None = None,
 ) -> CommandResult:
     """
-    Run a shell pipeline (``bash -lc``). Use only when benchmark verification requires pipes.
+    Run a shell pipeline (``bash -lc``). Used only when benchmark verification requires pipes.
 
-    The command string is logged at debug level; avoid embedding secrets.
+    The command string is logged at debug level.
     """
     logger.debug("run_shell: %s", command)
     try:

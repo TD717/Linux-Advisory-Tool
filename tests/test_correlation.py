@@ -36,6 +36,50 @@ def test_socket_exposure_bumps_priority():
     assert cf.priority_adjustments
 
 
+def test_ssh_noncompliant_and_listening_on_22_bumps():
+    rt = RuntimeSnapshot(hostname="h")
+    rt.listening_endpoints.append(ListeningEndpoint("tcp", "0.0.0.0", 22, "sshd"))
+    sf = StaticFinding(
+        rule_id="SSH-1",
+        section="s",
+        title="t",
+        category="ssh",
+        rationale="r",
+        recommendation="rec",
+        severity="medium",
+        tags=("ssh", "cis"),
+        status=ComplianceStatus.NON_COMPLIANT,
+        expected_compliant_state="ok",
+        verification_summary="v",
+        evidence=(FindingEvidence("e", "d"),),
+    )
+    out = correlate_all([sf], rt)
+    assert out[0].priority == "high"
+    assert out[0].priority_adjustments
+
+
+def test_firewall_noncompliant_many_listeners_bumps():
+    rt = RuntimeSnapshot(hostname="h")
+    for i in range(6):
+        rt.listening_endpoints.append(ListeningEndpoint("tcp", "127.0.0.1", 8000 + i, None))
+    sf = StaticFinding(
+        rule_id="FW-1",
+        section="s",
+        title="t",
+        category="firewall",
+        rationale="r",
+        recommendation="rec",
+        severity="high",
+        tags=("cis",),
+        status=ComplianceStatus.NON_COMPLIANT,
+        expected_compliant_state="ok",
+        verification_summary="v",
+        evidence=(FindingEvidence("e", "d"),),
+    )
+    out = correlate_all([sf], rt)
+    assert out[0].priority == "critical"
+
+
 def test_no_bump_when_compliant():
     rt = RuntimeSnapshot(hostname="h")
     rt.listening_endpoints.extend(

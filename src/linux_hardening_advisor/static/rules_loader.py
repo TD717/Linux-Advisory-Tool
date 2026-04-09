@@ -48,7 +48,6 @@ def load_rules_from_directory(directory: Path, *, recursive: bool = True) -> lis
     """
     Load and merge all ``*.yaml`` / ``*.yml`` / ``*.json`` rule files.
 
-    By default, searches **recursively** so you can use ``rules/cis/``, ``rules/examples/``, etc.
     """
     paths = _collect_rule_paths(directory, recursive=recursive)
     rules: list[BenchmarkRule] = []

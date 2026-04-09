@@ -10,7 +10,7 @@ from pathlib import Path
 from linux_hardening_advisor.correlation.engine import correlate_all
 from linux_hardening_advisor.models.findings import ScanReport
 from linux_hardening_advisor.models.rules import BenchmarkRule
-from linux_hardening_advisor.runtime.listening_ports import collect_listening_ports
+from linux_hardening_advisor.runtime.host_snapshot import collect_full_snapshot
 from linux_hardening_advisor.static.evaluator import evaluate_rule
 from linux_hardening_advisor.static.rules_loader import load_rules_from_directory
 
@@ -36,7 +36,7 @@ def run_scan(
 
         runtime = RuntimeSnapshot(hostname=hostname)
     else:
-        runtime = collect_listening_ports(hostname=hostname)
+        runtime = collect_full_snapshot(hostname=hostname)
 
     correlated = correlate_all(static_results, runtime)
     return ScanReport(

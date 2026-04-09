@@ -11,7 +11,7 @@ from typing import Callable
 
 from linux_hardening_advisor.engine import run_scan
 from linux_hardening_advisor.reporting import print_terminal_summary, report_to_json, report_to_markdown
-from linux_hardening_advisor.runtime.listening_ports import collect_listening_ports
+from linux_hardening_advisor.runtime.host_snapshot import collect_full_snapshot
 from linux_hardening_advisor.static.rules_loader import iter_rule_files, load_rules_from_directory
 
 _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -46,7 +46,7 @@ def _list_benchmarks(rules_dir: Path) -> int:
 
 
 def _show_host_snapshot() -> int:
-    snap = collect_listening_ports()
+    snap = collect_full_snapshot()
     print(json.dumps(snap.to_summary(), indent=2))
     return 0
 
