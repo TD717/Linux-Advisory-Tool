@@ -15,7 +15,23 @@ pip install -e ".[dev]"
 
 ## Usage
 
-The installed command is **`advisory`**. All actions are **single-level** subcommands (same pattern as `run`—no extra nesting):
+The installed command is **`advisory`**.
+
+### Interactive menu (default)
+
+Running without a subcommand opens a numbered menu. After each action finishes, the menu appears again until you select **Exit**.
+
+```bash
+advisory
+```
+
+You can also force menu mode explicitly:
+
+```bash
+advisory --menu
+```
+
+### Direct commands
 
 | Command | Purpose |
 |--------|---------|
@@ -28,4 +44,5 @@ advisory run --json-out report.json --markdown-out report.md
 advisory list-benchmarks
 advisory host-snapshot
 ```
-=======
+
+Equivalent: `python -m linux_hardening_advisor ...` with the same subcommands.
