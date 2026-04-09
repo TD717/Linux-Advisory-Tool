@@ -28,4 +28,3 @@ advisory run --json-out report.json --markdown-out report.md
 advisory list-benchmarks
 advisory host-snapshot
 ```
-=======
