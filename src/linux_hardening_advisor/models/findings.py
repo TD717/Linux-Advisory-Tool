@@ -1,4 +1,4 @@
-"""Normalized finding and report objects (thesis-friendly, explainable)."""
+"""Normalized finding and report objects"""
 
 from __future__ import annotations
 

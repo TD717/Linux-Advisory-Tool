@@ -1,7 +1,6 @@
 """
 Rule-based correlation: priority is adjusted using explicit, readable logic.
 
-Add new functions and append them to ``_CORRELATION_RULES``. No ML or hidden scoring.
 """
 
 from __future__ import annotations

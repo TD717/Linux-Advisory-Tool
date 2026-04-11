@@ -35,7 +35,8 @@ def report_to_markdown(report: ScanReport) -> str:
         f"a bounded **auth/journal excerpt** (heuristic failed-login hints: **{auth_hints}**), "
         f"a bounded **security journal** excerpt (err..alert), and **pending apt upgrades** "
         f"(simulated count: **{pending}**; `None` if apt is unavailable). "
-        "Full fields and excerpts are at the end of this document.",
+        "Auth and security journal excerpts appear as readable blocks under **Runtime snapshot (summary)** below "
+        "(not only inside the JSON).",
         "",
         "3. **Correlation** — explicit rules may attach *runtime evidence* to specific findings and "
         "adjust priority with a human-readable reason. If no rule matches a finding, that finding still "
@@ -83,6 +84,9 @@ def report_to_markdown(report: ScanReport) -> str:
             lines.append("")
             for pa in cf.priority_adjustments:
                 lines.append(f"- {pa.reason}")
+                if pa.supporting_evidence:
+                    for se in pa.supporting_evidence:
+                        lines.append(f"  - `{se.label}`: {se.detail}")
             lines.append("")
         if cf.correlation_notes:
             lines.append("**Correlation notes:**")
@@ -103,13 +107,51 @@ def report_to_markdown(report: ScanReport) -> str:
                 lines.append(f"- `{ev.label}`: {ev.detail}")
         else:
             lines.append(
-                "- *No runtime lines were attached by correlation rules for this control.* "
-                "The host-wide snapshot still applies for manual interpretation (see § Runtime snapshot)."
+                "- *No per-finding correlation attachment for this control.* "
+                "Correlation only adds extra runtime lines when an explicit hybrid rule matches "
+                "(e.g. SSH-related non-compliance with TCP/22 exposed, firewall issues with many listeners, "
+                "or high failed-login hints in the captured auth excerpt). "
+                "Runtime data for the whole host is still collected once per scan — see **Runtime snapshot (summary)** below."
             )
         lines.append("")
         lines.append("---")
         lines.append("")
     lines.append("## Runtime snapshot (summary)")
+    lines.append("")
+    auth_prev = snap.get("auth_log_excerpt_preview") or ""
+    sec_prev = snap.get("security_journal_excerpt_preview") or ""
+    lines.append("### Authentication failure indicators (heuristic)")
+    lines.append("")
+    lines.append(
+        f"- **Heuristic failed-login hint count** (pattern matches in the captured auth excerpt): "
+        f"**{auth_hints}**"
+    )
+    lines.append("")
+    lines.append("### Authentication-related log excerpt")
+    lines.append("")
+    if auth_prev.strip():
+        lines.append("```")
+        lines.append(auth_prev.rstrip())
+        lines.append("```")
+    else:
+        lines.append(
+            "*No authentication excerpt was collected* (empty journal/auth.log, insufficient permissions, "
+            "or SSH units had no recent lines in the bounded window)."
+        )
+    lines.append("")
+    lines.append("### Security-relevant journal events (err..alert)")
+    lines.append("")
+    if sec_prev.strip():
+        lines.append("```")
+        lines.append(sec_prev.rstrip())
+        lines.append("```")
+    else:
+        lines.append(
+            "*No err..alert journal excerpt was collected* (empty result, or `journalctl` failed — see "
+            "collection notes above if any)."
+        )
+    lines.append("")
+    lines.append("### Full snapshot (machine-readable JSON)")
     lines.append("")
     lines.append("```json")
     lines.append(__import__("json").dumps(dict(report.runtime_snapshot_summary), indent=2))
