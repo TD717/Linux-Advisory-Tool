@@ -32,6 +32,7 @@ def evaluate_rule(rule: BenchmarkRule) -> StaticFinding:
 
 
 def _apply_finding_condition(pred: bool, fc: FindingCondition) -> bool:
+    """Interpret the predicate according to the rule finding condition."""
     if fc == FindingCondition.NON_COMPLIANT_IF_TRUE:
         return pred
     if fc == FindingCondition.NON_COMPLIANT_IF_FALSE:
@@ -40,6 +41,7 @@ def _apply_finding_condition(pred: bool, fc: FindingCondition) -> bool:
 
 
 def _error_finding(rule: BenchmarkRule, err: str) -> StaticFinding:
+    """Build a standardized ERROR finding when evaluation fails."""
     return StaticFinding(
         rule_id=rule.id,
         section=rule.section,
@@ -63,6 +65,7 @@ def _build_finding(
     evidence: tuple[FindingEvidence, ...],
     raw_error: str | None,
 ) -> StaticFinding:
+    """Construct a normalized StaticFinding from evaluated fields."""
     return StaticFinding(
         rule_id=rule.id,
         section=rule.section,
@@ -81,10 +84,12 @@ def _build_finding(
 
 
 def _expected_summary(rule: BenchmarkRule) -> str:
+    """Create a compact expected-state summary for report rendering."""
     return str(rule.expected) if rule.expected else "(see rule documentation)"
 
 
 def _verification_summary(rule: BenchmarkRule, evidence: tuple[FindingEvidence, ...]) -> str:
+    """Prefer command evidence text, fallback to check type summary."""
     for ev in evidence:
         if ev.label == "command":
             return ev.detail[:500]
@@ -128,6 +133,7 @@ def _evaluate_predicate(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidenc
 
 
 def _cmd_output_contains(rule: BenchmarkRule, *, want_contains: bool) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate whether command output should contain or exclude a substring."""
     cmd = rule.verification_command or rule.target.get("command")
     if not isinstance(cmd, str) or not cmd.strip():
         raise ValueError("command_output_* requires verification_command or target.command")
@@ -147,6 +153,7 @@ def _cmd_output_contains(rule: BenchmarkRule, *, want_contains: bool) -> tuple[b
 
 
 def _command_exit_status(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate command return code against the expected exit status."""
     cmd = rule.verification_command or rule.target.get("command")
     if not isinstance(cmd, str) or not cmd.strip():
         raise ValueError("command_exit_status requires verification_command or target.command")
@@ -164,6 +171,7 @@ def _command_exit_status(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEviden
 
 
 def _file_exists(rule: BenchmarkRule, *, want: bool) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate file presence/absence controls and attach path evidence."""
     path = Path(str(rule.target.get("path", ""))).expanduser()
     exists = path.exists()
     # predicate: "non-compliant signal" before finding_condition — here pred means
@@ -178,6 +186,7 @@ def _file_exists(rule: BenchmarkRule, *, want: bool) -> tuple[bool, tuple[Findin
 
 
 def _file_mode(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate a file permission mode check using octal expectation."""
     path = Path(str(rule.target.get("path", ""))).expanduser()
     if not path.exists():
         return True, (FindingEvidence("path", str(path), {"exists": False}),)
@@ -193,6 +202,7 @@ def _file_mode(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, ...]]:
 
 
 def _dpkg_installed(package: str) -> bool:
+    """Return True when dpkg reports the package as installed."""
     r = run_argv(["dpkg-query", "-W", "-f=${Status}", package])
     out = (r.stdout or "").strip()
     if r.returncode != 0 and not out:
@@ -201,6 +211,7 @@ def _dpkg_installed(package: str) -> bool:
 
 
 def _package_absent_debian(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate Debian package-absent rule via dpkg-query state."""
     pkg = str(rule.target.get("package", ""))
     if not pkg:
         raise ValueError("package_absent requires target.package")
@@ -210,6 +221,7 @@ def _package_absent_debian(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvid
 
 
 def _package_present_debian(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate Debian package-present rule via dpkg-query state."""
     pkg = str(rule.target.get("package", ""))
     if not pkg:
         raise ValueError("package_present requires target.package")
@@ -219,6 +231,7 @@ def _package_present_debian(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvi
 
 
 def _systemctl_is_enabled(service: str) -> str | None:
+    """Return systemctl is-enabled state or None on lookup failure."""
     r = run_argv(["systemctl", "is-enabled", service], timeout_s=30.0)
     out = (r.stdout or "").strip()
     if r.returncode == 0 and out:
@@ -227,6 +240,7 @@ def _systemctl_is_enabled(service: str) -> str | None:
 
 
 def _service_disabled(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate service-disabled control using systemd enabled-state output."""
     svc = str(rule.target.get("service", ""))
     if not svc:
         raise ValueError("service_disabled requires target.service")
@@ -241,6 +255,7 @@ def _service_disabled(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence,
 
 
 def _service_enabled(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate service-enabled control using systemd enabled-state output."""
     svc = str(rule.target.get("service", ""))
     if not svc:
         raise ValueError("service_enabled requires target.service")
@@ -251,6 +266,7 @@ def _service_enabled(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, 
 
 
 def _service_active(rule: BenchmarkRule, *, want: bool) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate service active/inactive state using systemctl is-active."""
     svc = str(rule.target.get("service", ""))
     if not svc:
         raise ValueError("service_active/inactive requires target.service")
@@ -265,6 +281,7 @@ def _service_active(rule: BenchmarkRule, *, want: bool) -> tuple[bool, tuple[Fin
 
 
 def _config_value_equals(rule: BenchmarkRule, *, want: bool) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Evaluate key/value config controls in a simple line-based parser."""
     path = Path(str(rule.target.get("path", ""))).expanduser()
     key = str(rule.target.get("key", ""))
     expected_val = str(rule.expected.get("value", ""))
@@ -301,6 +318,7 @@ def _parse_simple_config(text: str, key: str) -> str | None:
 
 
 def _custom_not_implemented(rule: BenchmarkRule) -> tuple[bool, tuple[FindingEvidence, ...]]:
+    """Signal that custom check types need project-specific handlers."""
     raise NotImplementedError(
         "check_type=custom requires a registered handler (extend static/evaluator.py or use a plugin entry point)."
     )

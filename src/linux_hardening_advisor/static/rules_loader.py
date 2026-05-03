@@ -35,6 +35,7 @@ def load_rules_from_file(path: Path) -> list[BenchmarkRule]:
 
 
 def _collect_rule_paths(directory: Path, *, recursive: bool) -> list[Path]:
+    """Return sorted rule file paths from a directory tree."""
     if not directory.is_dir():
         raise FileNotFoundError(str(directory))
     glober = directory.rglob if recursive else directory.glob

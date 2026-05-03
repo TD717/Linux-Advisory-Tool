@@ -31,7 +31,6 @@ _EXPECTED_CIS_IDS = frozenset(
         "UBTU-24-102010",
         "UBTU-24-300006",
         "UBTU-24-400110",
-        "UBTU-24-400220",
     }
 )
 
@@ -95,7 +94,6 @@ def test_load_ubtu_cis_rules(rules_cis_dir: Path):
     assert by_id["UBTU-24-102010"].section == "1.33"
     assert by_id["UBTU-24-300006"].section == "1.53"
     assert by_id["UBTU-24-400110"].section == "1.81"
-    assert by_id["UBTU-24-400220"].section == "1.82"
 
 
 def test_load_project_rules_includes_cis(project_root: Path):

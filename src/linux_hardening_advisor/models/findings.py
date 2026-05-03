@@ -76,5 +76,6 @@ class ScanReport:
     runtime_snapshot_summary: Mapping[str, Any]
 
     def __post_init__(self) -> None:
+        """Normalize naive timestamps to UTC for stable report output."""
         if self.generated_at.tzinfo is None:
             self.generated_at = self.generated_at.replace(tzinfo=timezone.utc)

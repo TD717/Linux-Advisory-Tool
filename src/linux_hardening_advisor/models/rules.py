@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence
 
 
 class CheckType(str, Enum):
-    """Supported static evaluation strategies (extend as you add CIS checks)."""
+    """Supported static evaluation strategies."""
 
     PACKAGE_ABSENT = "package_absent"
     PACKAGE_PRESENT = "package_present"
@@ -28,8 +28,6 @@ class CheckType(str, Enum):
 
 
 class FindingCondition(str, Enum):
-    """How to interpret check output vs expected values."""
-
     NON_COMPLIANT_IF_TRUE = "non_compliant_if_true"
     NON_COMPLIANT_IF_FALSE = "non_compliant_if_false"
 

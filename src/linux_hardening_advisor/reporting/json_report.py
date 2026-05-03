@@ -11,6 +11,7 @@ from linux_hardening_advisor.models.findings import ScanReport
 
 
 def _json_safe(obj: Any) -> Any:
+    """Recursively convert enums/datetimes into JSON-serializable values."""
     if isinstance(obj, datetime):
         return obj.isoformat()
     if isinstance(obj, dict):
@@ -51,6 +52,7 @@ def report_to_json(report: ScanReport, *, indent: int = 2) -> str:
 
 
 def _static_as_dict(s: Any) -> dict[str, Any]:
+    """Convert StaticFinding dataclass to report-ready primitive fields."""
     d = asdict(s)
     d["status"] = s.status.value
     d["evidence"] = [asdict(e) for e in s.evidence]

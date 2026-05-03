@@ -27,6 +27,7 @@ def collect_listening_ports(hostname: str | None = None) -> RuntimeSnapshot:
 
 
 def _run_ss_listen() -> tuple[str, str]:
+    """Run ss (or netstat fallback) and return raw output plus source label."""
     r = run_argv(["ss", "-tulnp"], timeout_s=60.0)
     if r.returncode == 0 and (r.stdout or "").strip():
         return r.stdout or "", "ss -tulnp"
@@ -38,6 +39,7 @@ def _run_ss_listen() -> tuple[str, str]:
 
 
 def _parse_ss_lines(text: str) -> Iterable[ListeningEndpoint]:
+    """Yield parsed listening endpoints from ss/netstat text lines."""
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("Netid") or line.startswith("Active"):
@@ -48,6 +50,7 @@ def _parse_ss_lines(text: str) -> Iterable[ListeningEndpoint]:
 
 
 def _parse_one_line(line: str) -> ListeningEndpoint | None:
+    """Parse one ss/netstat row into a ListeningEndpoint when possible."""
     # Typical ``ss -tulnp``: Netid State Recv-Q Send-Q Local Peer Process
     parts = line.split()
     if len(parts) < 6:
@@ -63,6 +66,7 @@ def _parse_one_line(line: str) -> ListeningEndpoint | None:
 
 
 def _split_host_port(local: str) -> tuple[str, int | None]:
+    """Split local endpoint text into host and optional integer port."""
     if local == "*:*" or local == "[::]:*":
         return local, None
     if local.startswith("["):

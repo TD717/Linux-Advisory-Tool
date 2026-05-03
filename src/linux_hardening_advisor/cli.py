@@ -23,6 +23,7 @@ def _default_rules_dir() -> Path:
 
 
 def _run_advisory(rules_dir: Path, *, skip_runtime: bool, json_out: Path | None, markdown_out: Path | None) -> int:
+    """Run a full scan and optionally write JSON/Markdown artifacts."""
     report = run_scan(rules_dir, skip_runtime=skip_runtime)
     print_terminal_summary(report)
     if json_out:
@@ -35,6 +36,7 @@ def _run_advisory(rules_dir: Path, *, skip_runtime: bool, json_out: Path | None,
 
 
 def _list_benchmarks(rules_dir: Path) -> int:
+    """Print discovered benchmark files and total parsed rule count."""
     if not rules_dir.is_dir():
         print(f"Rules directory not found: {rules_dir}", file=sys.stderr)
         return 2
@@ -46,12 +48,14 @@ def _list_benchmarks(rules_dir: Path) -> int:
 
 
 def _show_host_snapshot() -> int:
+    """Collect and print the runtime snapshot as formatted JSON."""
     snap = collect_full_snapshot()
     print(json.dumps(snap.to_summary(), indent=2))
     return 0
 
 
 def _prompt_path(prompt: str) -> Path | None:
+    """Read an optional output path from interactive input."""
     raw = input(prompt).strip()
     if not raw:
         return None
@@ -59,6 +63,7 @@ def _prompt_path(prompt: str) -> Path | None:
 
 
 def _interactive_menu(rules_dir: Path) -> int:
+    """Run the numbered interactive CLI menu until the user exits."""
     actions: dict[str, tuple[str, Callable[[], int]]] = {
         "1": ("Run full advisory", lambda: _run_advisory(rules_dir, skip_runtime=False, json_out=None, markdown_out=None)),
         "2": (
@@ -125,6 +130,7 @@ def _interactive_menu(rules_dir: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse CLI arguments and dispatch to the selected command."""
     parser = argparse.ArgumentParser(
         prog="advisory",
         description=(
