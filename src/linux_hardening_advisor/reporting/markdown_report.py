@@ -7,6 +7,7 @@ from linux_hardening_advisor.models.findings import ScanReport
 
 def report_to_markdown(report: ScanReport) -> str:
     """Generate a thesis-friendly Markdown document."""
+    # Step 1: Pull frequently used snapshot values.
     snap = dict(report.runtime_snapshot_summary)
     listen_n = snap.get("listening_count", "—")
     listen_src = "unknown"
@@ -18,6 +19,7 @@ def report_to_markdown(report: ScanReport) -> str:
     pending = snap.get("pending_apt_upgrades", "—")
     notes = snap.get("collection_notes") or []
 
+    # Step 2: Write report header and methodology section.
     lines: list[str] = [
         "# Linux Hardening Advisory Report",
         "",
@@ -58,6 +60,7 @@ def report_to_markdown(report: ScanReport) -> str:
             "",
         ]
     )
+    # Step 3: Render each correlated finding with evidence.
     for cf in report.correlated_findings:
         s = cf.static
         lines.append(f"### {s.rule_id}: {s.title}")
@@ -118,6 +121,7 @@ def report_to_markdown(report: ScanReport) -> str:
         lines.append("")
     lines.append("## Runtime snapshot (summary)")
     lines.append("")
+    # Step 4: Render runtime snapshot blocks.
     auth_prev = snap.get("auth_log_excerpt_preview") or ""
     sec_prev = snap.get("security_journal_excerpt_preview") or ""
     lines.append("### Authentication failure indicators (heuristic)")

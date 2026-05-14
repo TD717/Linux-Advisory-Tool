@@ -17,11 +17,16 @@ def collect_listening_ports(hostname: str | None = None) -> RuntimeSnapshot:
     Parse ``ss -tulnp`` (or fallback) into ``ListeningEndpoint`` records.
     
     """
-    hn = hostname or socket.gethostname()
-    snap = RuntimeSnapshot(hostname=hn)
+    # Step 1: Resolve hostname for the runtime snapshot.
+    resolved_hostname = hostname or socket.gethostname()
+    snap = RuntimeSnapshot(hostname=resolved_hostname)
+
+    # Step 2: Collect raw listening output.
     text, source = _run_ss_listen()
     snap.metadata["listening_source"] = source
     snap.raw_commands["ss_or_netstat"] = text[:20000]
+
+    # Step 3: Parse rows into normalized endpoint objects.
     snap.listening_endpoints.extend(_parse_ss_lines(text))
     return snap
 
@@ -84,4 +89,5 @@ def _split_host_port(local: str) -> tuple[str, int | None]:
             return host, int(port_s)
         except ValueError:
             return local, None
+    # Endpoint did not include a parseable port number.
     return local, None

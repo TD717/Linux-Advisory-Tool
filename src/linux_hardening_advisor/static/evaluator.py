@@ -27,7 +27,10 @@ def evaluate_rule(rule: BenchmarkRule) -> StaticFinding:
         return _error_finding(rule, str(exc))
 
     non_compliant = _apply_finding_condition(pred_non_compliant, rule.finding_condition)
-    status = ComplianceStatus.NON_COMPLIANT if non_compliant else ComplianceStatus.COMPLIANT
+    if non_compliant:
+        status = ComplianceStatus.NON_COMPLIANT
+    else:
+        status = ComplianceStatus.COMPLIANT
     return _build_finding(rule, status, evidence, None)
 
 
@@ -176,11 +179,12 @@ def _file_exists(rule: BenchmarkRule, *, want: bool) -> tuple[bool, tuple[Findin
     exists = path.exists()
     # predicate: "non-compliant signal" before finding_condition — here pred means
     # "file exists" as a raw fact for FILE_EXISTS; we map below in caller via types.
+    # For FILE_EXISTS, non-compliance means "missing".
+    # For FILE_NOT_EXISTS, non-compliance means "present".
     if want:
-        pred = not exists  # missing file => non-compliant when NON_COMPLIANT_IF_TRUE
-        ev = (FindingEvidence("path", str(path), {"exists": exists}),)
-        return pred, ev
-    pred = exists  # file should not exist but does
+        pred = not exists
+    else:
+        pred = exists
     ev = (FindingEvidence("path", str(path), {"exists": exists}),)
     return pred, ev
 
@@ -271,12 +275,13 @@ def _service_active(rule: BenchmarkRule, *, want: bool) -> tuple[bool, tuple[Fin
     if not svc:
         raise ValueError("service_active/inactive requires target.service")
     r = run_argv(["systemctl", "is-active", svc], timeout_s=30.0)
-    active = (r.stdout or "").strip() == "active"
+    state_text = (r.stdout or "").strip()
+    active = state_text == "active"
     if want:
         pred = not active
     else:
         pred = active
-    ev = (FindingEvidence("systemctl", f"is-active {svc}", {"active": active, "stdout": r.stdout.strip()}),)
+    ev = (FindingEvidence("systemctl", f"is-active {svc}", {"active": active, "stdout": state_text}),)
     return pred, ev
 
 
@@ -292,7 +297,10 @@ def _config_value_equals(rule: BenchmarkRule, *, want: bool) -> tuple[bool, tupl
     text = path.read_text(encoding="utf-8", errors="replace")
     actual = _parse_simple_config(text, key)
     matches = actual is not None and actual.strip() == expected_val.strip()
-    pred = not matches if want else matches
+    if want:
+        pred = not matches
+    else:
+        pred = matches
     ev = (
         FindingEvidence(
             "config",

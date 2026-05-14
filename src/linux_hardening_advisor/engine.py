@@ -27,10 +27,14 @@ def run_scan(
 
     **Framework entry point** for CLI and tests.
     """
+    # Step 1: Load benchmark rules.
     rules = load_rules_from_directory(rules_dir)
     hostname = socket.gethostname()
+
+    # Step 2: Run static checks.
     static_results = [evaluate_rule(r) for r in rules]
 
+    # Step 3: Build runtime snapshot (or empty one when disabled).
     if skip_runtime:
         from linux_hardening_advisor.models.runtime_state import RuntimeSnapshot
 
@@ -38,7 +42,10 @@ def run_scan(
     else:
         runtime = collect_full_snapshot(hostname=hostname)
 
+    # Step 4: Correlate static findings with runtime context.
     correlated = correlate_all(static_results, runtime)
+
+    # Step 5: Build normalized report payload.
     return ScanReport(
         generated_at=datetime.now(timezone.utc),
         hostname=hostname,

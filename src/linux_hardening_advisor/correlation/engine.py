@@ -72,6 +72,16 @@ def _bump_priority(current: str, delta: int) -> str:
     return _PRIORITY_ORDER[idx]
 
 
+def _make_bool_runtime_evidence(label: str, value: bool | None) -> FindingEvidence:
+    """Create normalized bool/unknown runtime evidence entries."""
+    return FindingEvidence(label, str(value).lower(), {})
+
+
+def _make_named_bool_runtime_evidence(label: str, value: bool | None, name: str | None) -> FindingEvidence:
+    """Create normalized bool evidence with an optional human-friendly name."""
+    return FindingEvidence(label, f"{str(value).lower()} ({name or 'none-detected'})", {})
+
+
 CorrelationFn = Callable[
     [StaticFinding, RuntimeSnapshot],
     tuple[PriorityAdjustment | None, list[FindingEvidence], list[str]],
@@ -252,8 +262,8 @@ def _rule_firewall_install_runtime_context(
     alt = runtime.alternative_firewall_available
     alt_name = runtime.alternative_firewall_name or "none-detected"
     ev = [
-        FindingEvidence("ufw_installed_runtime", str(ufw).lower(), {}),
-        FindingEvidence("alternative_firewall_available", f"{str(alt).lower()} ({alt_name})", {}),
+        _make_bool_runtime_evidence("ufw_installed_runtime", ufw),
+        _make_named_bool_runtime_evidence("alternative_firewall_available", alt, alt_name),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:
@@ -289,10 +299,10 @@ def _rule_firewall_activation_runtime_context(
     rules = runtime.ufw_rules_present_runtime
     kernel_loaded = runtime.kernel_packet_filter_loaded
     ev = [
-        FindingEvidence("ufw_installed_runtime", str(installed).lower(), {}),
-        FindingEvidence("ufw_active_runtime", str(active).lower(), {}),
-        FindingEvidence("ufw_rules_present_runtime", str(rules).lower(), {}),
-        FindingEvidence("kernel_packet_filter_loaded", str(kernel_loaded).lower(), {}),
+        _make_bool_runtime_evidence("ufw_installed_runtime", installed),
+        _make_bool_runtime_evidence("ufw_active_runtime", active),
+        _make_bool_runtime_evidence("ufw_rules_present_runtime", rules),
+        _make_bool_runtime_evidence("kernel_packet_filter_loaded", kernel_loaded),
     ]
 
     if installed is False:
@@ -352,10 +362,10 @@ def _rule_apparmor_install_runtime_context(
     loaded = runtime.apparmor_profiles_loaded
     enforced = runtime.apparmor_profiles_enforced
     ev = [
-        FindingEvidence("apparmor_installed_runtime", str(inst).lower(), {}),
-        FindingEvidence("apparmor_kernel_enabled", str(kern).lower(), {}),
-        FindingEvidence("apparmor_profiles_loaded", str(loaded).lower(), {}),
-        FindingEvidence("apparmor_profiles_enforced", str(enforced).lower(), {}),
+        _make_bool_runtime_evidence("apparmor_installed_runtime", inst),
+        _make_bool_runtime_evidence("apparmor_kernel_enabled", kern),
+        _make_bool_runtime_evidence("apparmor_profiles_loaded", loaded),
+        _make_bool_runtime_evidence("apparmor_profiles_enforced", enforced),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:
@@ -419,10 +429,10 @@ def _rule_apparmor_service_runtime_context(
     loaded = runtime.apparmor_profiles_loaded
     enforced = runtime.apparmor_profiles_enforced
     ev = [
-        FindingEvidence("apparmor_service_active", str(svc).lower(), {}),
-        FindingEvidence("apparmor_kernel_enabled", str(kern).lower(), {}),
-        FindingEvidence("apparmor_profiles_loaded", str(loaded).lower(), {}),
-        FindingEvidence("apparmor_profiles_enforced", str(enforced).lower(), {}),
+        _make_bool_runtime_evidence("apparmor_service_active", svc),
+        _make_bool_runtime_evidence("apparmor_kernel_enabled", kern),
+        _make_bool_runtime_evidence("apparmor_profiles_loaded", loaded),
+        _make_bool_runtime_evidence("apparmor_profiles_enforced", enforced),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:
@@ -486,10 +496,10 @@ def _rule_pwquality_runtime_context(
     params = runtime.pwquality_params_defined
     flow = runtime.pwquality_password_flow_enforced
     ev = [
-        FindingEvidence("pwquality_package_installed_runtime", str(inst).lower(), {}),
-        FindingEvidence("pwquality_pam_referenced", str(ref).lower(), {}),
-        FindingEvidence("pwquality_params_defined", str(params).lower(), {}),
-        FindingEvidence("pwquality_password_flow_enforced", str(flow).lower(), {}),
+        _make_bool_runtime_evidence("pwquality_package_installed_runtime", inst),
+        _make_bool_runtime_evidence("pwquality_pam_referenced", ref),
+        _make_bool_runtime_evidence("pwquality_params_defined", params),
+        _make_bool_runtime_evidence("pwquality_password_flow_enforced", flow),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:
@@ -544,9 +554,9 @@ def _rule_ssh_install_runtime_context(
     proc = runtime.sshd_process_running_runtime
     p22 = runtime.ssh_port_22_listening_runtime
     ev = [
-        FindingEvidence("ssh_service_active_runtime", str(svc).lower(), {}),
-        FindingEvidence("sshd_process_running_runtime", str(proc).lower(), {}),
-        FindingEvidence("ssh_port_22_listening_runtime", str(p22).lower(), {}),
+        _make_bool_runtime_evidence("ssh_service_active_runtime", svc),
+        _make_bool_runtime_evidence("sshd_process_running_runtime", proc),
+        _make_bool_runtime_evidence("ssh_port_22_listening_runtime", p22),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:
@@ -584,9 +594,9 @@ def _rule_ssh_service_runtime_context(
     enabled = runtime.ssh_service_enabled_runtime
     p22 = runtime.ssh_port_22_listening_runtime
     ev = [
-        FindingEvidence("ssh_service_active_runtime", str(active).lower(), {}),
-        FindingEvidence("ssh_service_enabled_runtime", str(enabled).lower(), {}),
-        FindingEvidence("ssh_port_22_listening_runtime", str(p22).lower(), {}),
+        _make_bool_runtime_evidence("ssh_service_active_runtime", active),
+        _make_bool_runtime_evidence("ssh_service_enabled_runtime", enabled),
+        _make_bool_runtime_evidence("ssh_port_22_listening_runtime", p22),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:
@@ -645,9 +655,9 @@ def _rule_boot_auth_runtime_context(
     protected = runtime.grub_cfg_protected_runtime
     single = runtime.single_user_auth_required_runtime
     ev = [
-        FindingEvidence("grub_auth_configured_runtime", str(auth).lower(), {}),
-        FindingEvidence("grub_cfg_protected_runtime", str(protected).lower(), {}),
-        FindingEvidence("single_user_auth_required_runtime", str(single).lower(), {}),
+        _make_bool_runtime_evidence("grub_auth_configured_runtime", auth),
+        _make_bool_runtime_evidence("grub_cfg_protected_runtime", protected),
+        _make_bool_runtime_evidence("single_user_auth_required_runtime", single),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:
@@ -712,9 +722,9 @@ def _rule_root_login_runtime_context(
     ssh_root_allowed = runtime.ssh_permit_root_login_allowed_runtime
     root_sessions = runtime.active_root_sessions_runtime
     ev = [
-        FindingEvidence("root_account_locked_runtime", str(locked).lower(), {}),
-        FindingEvidence("ssh_permit_root_login_allowed_runtime", str(ssh_root_allowed).lower(), {}),
-        FindingEvidence("active_root_sessions_runtime", str(root_sessions).lower(), {}),
+        _make_bool_runtime_evidence("root_account_locked_runtime", locked),
+        _make_bool_runtime_evidence("ssh_permit_root_login_allowed_runtime", ssh_root_allowed),
+        _make_bool_runtime_evidence("active_root_sessions_runtime", root_sessions),
     ]
     notes: list[str] = []
 
@@ -790,12 +800,12 @@ def _rule_timesyncd_runtime_context(
     proc = runtime.timesyncd_process_running
     alt = runtime.approved_timesync_service_active
     ev = [
-        FindingEvidence("timesyncd_service_active", str(svc).lower(), {}),
-        FindingEvidence("timesyncd_process_running", str(proc).lower(), {}),
-        FindingEvidence(
+        _make_bool_runtime_evidence("timesyncd_service_active", svc),
+        _make_bool_runtime_evidence("timesyncd_process_running", proc),
+        _make_named_bool_runtime_evidence(
             "approved_timesync_service_active",
-            f"{str(alt).lower()} ({runtime.approved_timesync_service_name or 'none-detected'})",
-            {},
+            alt,
+            runtime.approved_timesync_service_name,
         ),
     ]
 
@@ -838,12 +848,12 @@ def _rule_ntp_runtime_context(
     proc = runtime.ntp_process_running
     alt = runtime.approved_timesync_service_active
     ev = [
-        FindingEvidence("ntp_service_active", str(svc).lower(), {}),
-        FindingEvidence("ntp_process_running", str(proc).lower(), {}),
-        FindingEvidence(
+        _make_bool_runtime_evidence("ntp_service_active", svc),
+        _make_bool_runtime_evidence("ntp_process_running", proc),
+        _make_named_bool_runtime_evidence(
             "approved_timesync_service_active",
-            f"{str(alt).lower()} ({runtime.approved_timesync_service_name or 'none-detected'})",
-            {},
+            alt,
+            runtime.approved_timesync_service_name,
         ),
     ]
 
@@ -886,9 +896,9 @@ def _rule_telnet_runtime_context(
     proc = runtime.telnetd_process_running
     p23 = runtime.telnet_port_23_listening
     ev = [
-        FindingEvidence("telnet_service_active", str(svc).lower(), {}),
-        FindingEvidence("telnetd_process_running", str(proc).lower(), {}),
-        FindingEvidence("telnet_port_23_listening", str(p23).lower(), {}),
+        _make_bool_runtime_evidence("telnet_service_active", svc),
+        _make_bool_runtime_evidence("telnetd_process_running", proc),
+        _make_bool_runtime_evidence("telnet_port_23_listening", p23),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:
@@ -931,9 +941,9 @@ def _rule_rsyslog_runtime_context(
     proc = runtime.rsyslogd_process_running
     writes = runtime.syslog_recently_updated
     ev = [
-        FindingEvidence("rsyslog_service_active", str(svc).lower(), {}),
-        FindingEvidence("rsyslogd_process_running", str(proc).lower(), {}),
-        FindingEvidence("syslog_recently_updated", str(writes).lower(), {}),
+        _make_bool_runtime_evidence("rsyslog_service_active", svc),
+        _make_bool_runtime_evidence("rsyslogd_process_running", proc),
+        _make_bool_runtime_evidence("syslog_recently_updated", writes),
     ]
 
     if static.status == ComplianceStatus.NON_COMPLIANT:

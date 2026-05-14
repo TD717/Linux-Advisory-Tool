@@ -18,15 +18,17 @@ def load_rules_from_file(path: Path) -> list[BenchmarkRule]:
     """Load rules from a single ``.yaml``/``.yml``/``.json`` file."""
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
-        data = json.loads(text)
+        parsed_data = json.loads(text)
     else:
-        data = yaml.safe_load(text)
-    if data is None:
+        parsed_data = yaml.safe_load(text)
+
+    if parsed_data is None:
         return []
-    if not isinstance(data, list):
+    if not isinstance(parsed_data, list):
         raise ValueError(f"{path}: root must be a list of rule objects")
+
     rules: list[BenchmarkRule] = []
-    for item in data:
+    for item in parsed_data:
         if not isinstance(item, dict):
             raise ValueError(f"{path}: each rule must be a mapping")
         rules.append(BenchmarkRule.from_mapping(item))

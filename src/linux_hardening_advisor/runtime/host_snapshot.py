@@ -13,6 +13,20 @@ from pathlib import Path
 
 from linux_hardening_advisor.collectors.subprocess_runner import run_argv, run_shell
 from linux_hardening_advisor.models.runtime_state import RuntimeSnapshot
+from linux_hardening_advisor.runtime.commands import (
+    run_apparmor_status,
+    run_auth_journal_excerpt,
+    run_command_exists_check,
+    run_iptables_rules,
+    run_nft_ruleset,
+    run_pending_apt_count,
+    run_security_journal_excerpt,
+    run_sshd_permit_root_login_line,
+    run_systemctl_cat_rescue_emergency,
+    run_systemctl_list_enabled_services,
+    run_ufw_status,
+    run_who,
+)
 from linux_hardening_advisor.runtime.listening_ports import collect_listening_ports
 
 logger = logging.getLogger(__name__)
@@ -61,16 +75,7 @@ def collect_full_snapshot(hostname: str | None = None) -> RuntimeSnapshot:
 
 def _collect_enabled_services(snap: RuntimeSnapshot) -> None:
     """Populate enabled systemd services from list-unit-files output."""
-    r = run_argv(
-        [
-            "systemctl",
-            "list-unit-files",
-            "--type=service",
-            "--state=enabled",
-            "--no-pager",
-        ],
-        timeout_s=90.0,
-    )
+    r = run_systemctl_list_enabled_services()
     snap.raw_commands["systemctl_list_unit_files_enabled"] = (r.stdout or "")[:25000]
     if r.returncode != 0:
         snap.collection_notes.append(
@@ -93,25 +98,7 @@ def _collect_enabled_services(snap: RuntimeSnapshot) -> None:
 
 def _collect_auth_excerpt(snap: RuntimeSnapshot) -> None:
     """Capture bounded SSH/auth logs from journalctl or auth.log fallback."""
-    r = run_argv(
-        [
-            "journalctl",
-            "-u",
-            "ssh",
-            "-u",
-            "ssh.service",
-            "-u",
-            "sshd",
-            "-u",
-            "sshd.service",
-            "--since",
-            "24 hours ago",
-            "-n",
-            "150",
-            "--no-pager",
-        ],
-        timeout_s=45.0,
-    )
+    r = run_auth_journal_excerpt()
     text = (r.stdout or "").strip()
     source = "journalctl ssh units"
     if r.returncode != 0 or not text:
@@ -136,19 +123,7 @@ def _collect_auth_excerpt(snap: RuntimeSnapshot) -> None:
 
 def _collect_security_journal(snap: RuntimeSnapshot) -> None:
     """Capture a bounded recent err..alert journal excerpt."""
-    r = run_argv(
-        [
-            "journalctl",
-            "-p",
-            "err..alert",
-            "--since",
-            "24 hours ago",
-            "-n",
-            "60",
-            "--no-pager",
-        ],
-        timeout_s=45.0,
-    )
+    r = run_security_journal_excerpt()
     if r.returncode != 0:
         snap.collection_notes.append(f"security-journal: journalctl err..alert failed (rc={r.returncode})")
         return
@@ -162,7 +137,7 @@ def _collect_pending_apt(snap: RuntimeSnapshot) -> None:
         snap.pending_apt_upgrades = None
         snap.collection_notes.append("updates: apt-get not found (non-Debian or minimal image)")
         return
-    r = run_shell("apt-get -s upgrade 2>/dev/null | grep -c '^Inst ' || true", timeout_s=120.0)
+    r = run_pending_apt_count()
     raw = (r.stdout or "").strip()
     try:
         n = int(raw.splitlines()[-1] if raw else "0")
@@ -187,15 +162,10 @@ def _count_failed_login_hints(snap: RuntimeSnapshot) -> None:
 def _collect_timesync_runtime(snap: RuntimeSnapshot) -> None:
     """Collect runtime status used for time-sync policy correlation."""
     snap.timesyncd_service_active = _is_service_active("systemd-timesyncd.service")
-    r = run_argv(["pgrep", "-x", "systemd-timesyncd"], timeout_s=20.0)
-    snap.raw_commands["pgrep_systemd_timesyncd"] = (r.stdout or "")[:4000]
-    if r.returncode == 0:
-        snap.timesyncd_process_running = True
-    elif r.returncode == 1:
-        snap.timesyncd_process_running = False
-    else:
-        snap.timesyncd_process_running = None
-        snap.collection_notes.append(f"timesyncd: pgrep failed (rc={r.returncode})")
+    # Step 1: Check process state directly.
+    snap.timesyncd_process_running = _check_process_running_with_pgrep(
+        snap, process_name="systemd-timesyncd", raw_key="pgrep_systemd_timesyncd", note_prefix="timesyncd"
+    )
 
     snap.approved_timesync_service_active = False
     snap.approved_timesync_service_name = None
@@ -208,23 +178,12 @@ def _collect_timesync_runtime(snap: RuntimeSnapshot) -> None:
         if active is None and snap.approved_timesync_service_active is False:
             snap.approved_timesync_service_active = None
 
+    # Step 2: Combine service-level indicators.
     ntp_states = [_is_service_active(unit) for unit in _NTP_UNITS]
-    if any(state is True for state in ntp_states):
-        snap.ntp_service_active = True
-    elif all(state is False for state in ntp_states):
-        snap.ntp_service_active = False
-    else:
-        snap.ntp_service_active = None
-
-    ntp_proc = run_argv(["pgrep", "-x", "ntpd"], timeout_s=20.0)
-    snap.raw_commands["pgrep_ntpd"] = (ntp_proc.stdout or "")[:4000]
-    if ntp_proc.returncode == 0:
-        snap.ntp_process_running = True
-    elif ntp_proc.returncode == 1:
-        snap.ntp_process_running = False
-    else:
-        snap.ntp_process_running = None
-        snap.collection_notes.append(f"ntp: pgrep failed (rc={ntp_proc.returncode})")
+    snap.ntp_service_active = _combine_service_states_to_bool(ntp_states)
+    snap.ntp_process_running = _check_process_running_with_pgrep(
+        snap, process_name="ntpd", raw_key="pgrep_ntpd", note_prefix="ntp"
+    )
 
 
 def _is_service_active(unit: str) -> bool | None:
@@ -251,25 +210,40 @@ def _is_service_enabled(unit: str) -> bool | None:
     return None
 
 
+def _combine_service_states_to_bool(states: list[bool | None]) -> bool | None:
+    """Convert a list of service states into one tri-state value."""
+    if any(state is True for state in states):
+        return True
+    if all(state is False for state in states):
+        return False
+    return None
+
+
+def _check_process_running_with_pgrep(
+    snap: RuntimeSnapshot,
+    *,
+    process_name: str,
+    raw_key: str,
+    note_prefix: str,
+) -> bool | None:
+    """Run pgrep for one process and return tri-state bool."""
+    result = run_argv(["pgrep", "-x", process_name], timeout_s=20.0)
+    snap.raw_commands[raw_key] = (result.stdout or "")[:4000]
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    snap.collection_notes.append(f"{note_prefix}: pgrep failed (rc={result.returncode})")
+    return None
+
+
 def _collect_telnet_runtime(snap: RuntimeSnapshot) -> None:
     """Collect runtime status used for telnet package/exposure correlation."""
     telnet_states = [_is_service_active(unit) for unit in _TELNET_UNITS]
-    if any(state is True for state in telnet_states):
-        snap.telnet_service_active = True
-    elif all(state is False for state in telnet_states):
-        snap.telnet_service_active = False
-    else:
-        snap.telnet_service_active = None
-
-    telnet_proc = run_argv(["pgrep", "-x", "telnetd"], timeout_s=20.0)
-    snap.raw_commands["pgrep_telnetd"] = (telnet_proc.stdout or "")[:4000]
-    if telnet_proc.returncode == 0:
-        snap.telnetd_process_running = True
-    elif telnet_proc.returncode == 1:
-        snap.telnetd_process_running = False
-    else:
-        snap.telnetd_process_running = None
-        snap.collection_notes.append(f"telnet: pgrep failed (rc={telnet_proc.returncode})")
+    snap.telnet_service_active = _combine_service_states_to_bool(telnet_states)
+    snap.telnetd_process_running = _check_process_running_with_pgrep(
+        snap, process_name="telnetd", raw_key="pgrep_telnetd", note_prefix="telnet"
+    )
 
     snap.telnet_port_23_listening = any(
         e.protocol == "tcp" and e.local_port == 23 for e in snap.listening_endpoints
@@ -280,15 +254,9 @@ def _collect_rsyslog_runtime(snap: RuntimeSnapshot) -> None:
     """Collect runtime status used for rsyslog install/enabled/active correlation."""
     snap.rsyslog_service_active = _is_service_active("rsyslog.service")
 
-    rsyslog_proc = run_argv(["pgrep", "-x", "rsyslogd"], timeout_s=20.0)
-    snap.raw_commands["pgrep_rsyslogd"] = (rsyslog_proc.stdout or "")[:4000]
-    if rsyslog_proc.returncode == 0:
-        snap.rsyslogd_process_running = True
-    elif rsyslog_proc.returncode == 1:
-        snap.rsyslogd_process_running = False
-    else:
-        snap.rsyslogd_process_running = None
-        snap.collection_notes.append(f"rsyslog: pgrep failed (rc={rsyslog_proc.returncode})")
+    snap.rsyslogd_process_running = _check_process_running_with_pgrep(
+        snap, process_name="rsyslogd", raw_key="pgrep_rsyslogd", note_prefix="rsyslog"
+    )
 
     if not _SYSLOG_PATH.exists():
         snap.syslog_recently_updated = False
@@ -331,13 +299,13 @@ def _is_package_installed(package: str) -> bool | None:
 
 def _has_command(binary: str) -> bool:
     """Check whether a command exists in PATH using shell builtins."""
-    r = run_shell(f"command -v {binary} >/dev/null 2>&1 && echo yes || echo no", timeout_s=20.0)
+    r = run_command_exists_check(binary)
     return (r.stdout or "").strip().endswith("yes")
 
 
 def _collect_ufw_runtime_state(snap: RuntimeSnapshot) -> None:
     """Collect ufw active state and basic rule presence from status output."""
-    r = run_shell("ufw status 2>/dev/null || true", timeout_s=30.0)
+    r = run_ufw_status()
     status = (r.stdout or "").strip()
     snap.raw_commands["ufw_status"] = status[:8000]
     if not status:
@@ -360,11 +328,11 @@ def _collect_kernel_filter_runtime(snap: RuntimeSnapshot) -> None:
     nft_out = ""
     ipt_out = ""
     if _has_command("nft"):
-        nft = run_shell("nft list ruleset 2>/dev/null || true", timeout_s=30.0)
+        nft = run_nft_ruleset()
         nft_out = (nft.stdout or "").strip()
         snap.raw_commands["nft_list_ruleset"] = nft_out[:8000]
     if _has_command("iptables"):
-        ipt = run_shell("iptables -S 2>/dev/null || true", timeout_s=30.0)
+        ipt = run_iptables_rules()
         ipt_out = (ipt.stdout or "").strip()
         snap.raw_commands["iptables_S"] = ipt_out[:8000]
     nft_loaded = "table " in nft_out
@@ -387,12 +355,10 @@ def _collect_apparmor_runtime(snap: RuntimeSnapshot) -> None:
             snap.collection_notes.append(f"apparmor: cannot read kernel enabled flag ({exc})")
     snap.apparmor_kernel_enabled = kernel_enabled
 
-    status_cmd = "aa-status 2>/dev/null || apparmor_status 2>/dev/null || true"
-    r = run_shell(status_cmd, timeout_s=40.0)
+    r = run_apparmor_status()
     out = (r.stdout or "").strip()
     snap.raw_commands["aa_status"] = out[:12000]
     if not out:
-        # Keep unknown when tools are unavailable; kernel flag still carries value if present.
         snap.apparmor_profiles_loaded = None
         snap.apparmor_profiles_enforced = None
         if snap.apparmor_installed_runtime is True and snap.apparmor_kernel_enabled is None:
@@ -432,20 +398,36 @@ def _extract_leading_int(text: str, suffix: str) -> int | None:
 
 def _collect_pwquality_runtime(snap: RuntimeSnapshot) -> None:
     """Collect runtime usage/enforcement signals for libpam-pwquality."""
-    snap.pwquality_package_installed_runtime = _is_package_installed("libpam-pwquality")
+    # Step 1: Check package presence.
+    package_installed = _is_package_installed("libpam-pwquality")
+    snap.pwquality_package_installed_runtime = package_installed
 
+    # Step 2: Read PAM password stack file.
     pam_text = _read_text_if_file(_PAM_COMMON_PASSWORD)
     if pam_text is None:
+        # If the file cannot be read, mark references as not detected.
         snap.pwquality_pam_referenced = False
         snap.pwquality_password_flow_enforced = False
     else:
-        low = pam_text.lower()
-        has_ref = "pam_pwquality.so" in low
-        snap.pwquality_pam_referenced = has_ref
-        flow_line = _pam_password_line_with_pwquality(low)
-        snap.pwquality_password_flow_enforced = flow_line
+        # Normalize to lowercase so comparisons stay case-insensitive.
+        pam_text_lower = pam_text.lower()
+
+        # Step 3: Detect module reference anywhere in file.
+        if "pam_pwquality.so" in pam_text_lower:
+            snap.pwquality_pam_referenced = True
+        else:
+            snap.pwquality_pam_referenced = False
+
+        # Step 4: Detect password stack line that actively includes pwquality.
+        if _pam_password_line_with_pwquality(pam_text_lower):
+            snap.pwquality_password_flow_enforced = True
+        else:
+            snap.pwquality_password_flow_enforced = False
+
+        # Keep a bounded raw excerpt for evidence/reporting.
         snap.raw_commands["pam_common_password_excerpt"] = pam_text[:4000]
 
+    # Step 5: Read pwquality config files and check parameter presence.
     conf_texts: list[str] = []
     conf = _read_text_if_file(_PWQUALITY_CONF)
     if conf is not None:
@@ -455,10 +437,12 @@ def _collect_pwquality_runtime(snap: RuntimeSnapshot) -> None:
             txt = _read_text_if_file(p)
             if txt is not None:
                 conf_texts.append(txt)
-    combined = "\n".join(conf_texts).lower()
-    snap.pwquality_params_defined = _has_pwquality_params(combined) if combined else False
-    if combined:
-        snap.raw_commands["pwquality_conf_excerpt"] = combined[:4000]
+    combined_text_lower = "\n".join(conf_texts).lower()
+    if combined_text_lower:
+        snap.pwquality_params_defined = _has_pwquality_params(combined_text_lower)
+        snap.raw_commands["pwquality_conf_excerpt"] = combined_text_lower[:4000]
+    else:
+        snap.pwquality_params_defined = False
 
 
 def _read_text_if_file(path: Path) -> str | None:
@@ -498,15 +482,9 @@ def _collect_ssh_runtime(snap: RuntimeSnapshot) -> None:
     """Collect SSH runtime availability signals for install/service correlation."""
     snap.ssh_service_active_runtime = _is_service_active("ssh.service")
     snap.ssh_service_enabled_runtime = _is_service_enabled("ssh.service")
-    r = run_argv(["pgrep", "-x", "sshd"], timeout_s=20.0)
-    snap.raw_commands["pgrep_sshd"] = (r.stdout or "")[:4000]
-    if r.returncode == 0:
-        snap.sshd_process_running_runtime = True
-    elif r.returncode == 1:
-        snap.sshd_process_running_runtime = False
-    else:
-        snap.sshd_process_running_runtime = None
-        snap.collection_notes.append(f"ssh: pgrep failed (rc={r.returncode})")
+    snap.sshd_process_running_runtime = _check_process_running_with_pgrep(
+        snap, process_name="sshd", raw_key="pgrep_sshd", note_prefix="ssh"
+    )
     snap.ssh_port_22_listening_runtime = any(
         e.protocol == "tcp" and e.local_port == 22 for e in snap.listening_endpoints
     )
@@ -531,7 +509,7 @@ def _collect_boot_auth_runtime(snap: RuntimeSnapshot) -> None:
             snap.collection_notes.append(f"boot: cannot stat grub.cfg ({exc})")
         snap.raw_commands["grub_cfg_auth_excerpt"] = low[:4000]
 
-    r = run_shell("systemctl cat rescue.service emergency.service 2>/dev/null || true", timeout_s=30.0)
+    r = run_systemctl_cat_rescue_emergency()
     unit_text = (r.stdout or "").lower()
     snap.raw_commands["systemctl_cat_rescue_emergency"] = unit_text[:8000]
     if not unit_text.strip():
@@ -553,7 +531,7 @@ def _collect_root_login_runtime(snap: RuntimeSnapshot) -> None:
         snap.root_account_locked_runtime = None
         snap.collection_notes.append("root: cannot determine passwd -S lock state")
 
-    sshd_t = run_shell("sshd -T 2>/dev/null | grep -i '^permitrootlogin ' || true", timeout_s=30.0)
+    sshd_t = run_sshd_permit_root_login_line()
     line = (sshd_t.stdout or "").strip().lower()
     snap.raw_commands["sshd_T_permitrootlogin"] = line[:2000]
     if not line:
@@ -563,10 +541,12 @@ def _collect_root_login_runtime(snap: RuntimeSnapshot) -> None:
     else:
         snap.ssh_permit_root_login_allowed_runtime = True
 
-    who = run_argv(["who"], timeout_s=20.0)
+    who = run_who()
     who_out = (who.stdout or "").strip()
     snap.raw_commands["who"] = who_out[:4000]
     snap.active_root_sessions_runtime = any(
         ln.split()[0] == "root" for ln in who_out.splitlines() if ln.split()
     )
+
+
 

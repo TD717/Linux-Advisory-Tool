@@ -1,4 +1,4 @@
-"""Command-line interface (argparse, stdlib-only)."""
+"""Command-line interface (argparse, stdlib)."""
 
 from __future__ import annotations
 
@@ -24,8 +24,13 @@ def _default_rules_dir() -> Path:
 
 def _run_advisory(rules_dir: Path, *, skip_runtime: bool, json_out: Path | None, markdown_out: Path | None) -> int:
     """Run a full scan and optionally write JSON/Markdown artifacts."""
+    # Step 1: Execute scan pipeline.
     report = run_scan(rules_dir, skip_runtime=skip_runtime)
+
+    # Step 2: Print terminal summary.
     print_terminal_summary(report)
+
+    # Step 3: Optionally write structured files.
     if json_out:
         json_out.write_text(report_to_json(report), encoding="utf-8")
         logging.info("Wrote JSON report to %s", json_out)
